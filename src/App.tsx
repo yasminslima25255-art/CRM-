@@ -24,7 +24,11 @@ import {
   MessageCircle,
   ArrowRight,
 } from "lucide-react";
+} from "lucide-react";
 
+if(typeof window!=="undefined"&&!window.storage){window.storage={get:async(key)=>{try{const v=localStorage.getItem(key);return v?{key,value:v}:null;}catch(e){return null;}},set:async(key,value)=>{try{localStorage.setItem(key,value);return{key,value};}catch(e){return null;}},delete:async(key)=>{try{localStorage.removeItem(key);return{key,deleted:true};}catch(e){return null;}}};}
+
+const STORAGE_PREFIX = "crm-vendas-data";
 const STORAGE_PREFIX = "crm-vendas-data";
 
 const EMPRESAS = [

@@ -31,8 +31,7 @@ if(typeof window!=="undefined"&&!window.storage){window.storage={get:async(key)=
 const STORAGE_PREFIX = "crm-vendas-data";
 
 const EMPRESAS = [
-  { id: "emp1", nome: "Nury Energia" },
-  { id: "emp2", nome: "Litoral Materiais" },
+  { id: "emp1", nome: "CRM" },
 ];
 
 const VENDEDORES = [

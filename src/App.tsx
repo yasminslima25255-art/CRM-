@@ -1,2277 +1,622 @@
-// @ts-nocheck
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import "./App.css";
 import {
-  Plus,
-  Search,
-  X,
-  Copy,
-  Phone,
-  Mail,
-  MapPin,
-  Building2,
-  Flame,
-  Sun,
-  Snowflake,
-  Pencil,
-  Trash2,
-  Check,
-  Clock,
-  UserPlus,
-  Eye,
-  FileText,
-  CalendarClock,
-  AlertTriangle,
-  Menu as MenuIcon,
-  MessageCircle,
-  ArrowRight,
-} from "lucide-react";
+  initialClientes, initialContatos, initialOrcamentos,
+  statusColor, funilEtapas, vendasPeriodo, origemContatos
+} from "./data";
 
-if(typeof window!=="undefined"&&!window.storage){window.storage={get:async(key)=>{try{const v=localStorage.getItem(key);return v?{key,value:v}:null;}catch(e){return null;}},set:async(key,value)=>{try{localStorage.setItem(key,value);return{key,value};}catch(e){return null;}},delete:async(key)=>{try{localStorage.removeItem(key);return{key,deleted:true};}catch(e){return null;}}};}
+// ===================== HELPERS =====================
+const badgeClass = (status) => "badge badge-" + (statusColor[status] || "gray");
+const formatBR = (dateStr) => { const [y, m, d] = dateStr.split("-"); return `${d}/${m}/${y}`; };
+const formatMoney = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const STORAGE_PREFIX = "crm-vendas-data";
-
-const EMPRESAS = [
-  { id: "emp1", nome: "CRM" },
-];
-
-const VENDEDORES = [
-  { id: "v1", nome: "Ana Ribeiro" },
-  { id: "v2", nome: "Bruno Alves" },
-  { id: "v3", nome: "Carla Souza" },
-];
-
-const STAGES = [
-  { id: "novo_contato", label: "Novo contato" },
-  { id: "em_contato", label: "Em contato" },
-  { id: "orcamento_enviado", label: "Orçamento enviado" },
-  { id: "negociacao", label: "Negociação" },
-  { id: "fechado", label: "Fechado" },
-  { id: "perdido", label: "Perdido" },
-];
-
-const TEMP_CONFIG = {
-  frio: { label: "Frio", color: "sky", icon: Snowflake },
-  morno: { label: "Morno", color: "amber", icon: Sun },
-  quente: { label: "Quente", color: "rose", icon: Flame },
+// ===================== ÍCONES ===================== (inline, sem dependências)
+const Icon = ({ path, size = 18 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{path}</svg>
+);
+const icons = {
+  home: <path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8.5Z" />,
+  users: <><circle cx="9" cy="8" r="3.2" /><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" /><circle cx="17.5" cy="9" r="2.5" /><path d="M15.2 14.2c2.9.3 5.3 2.4 5.3 5.3" /></>,
+  contatos: <><path d="M4 4h13l3 3v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" /><path d="M7 9h9M7 13h9M7 17h5" /></>,
+  file: <><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" /><path d="M14 3v5h5M8 13h8M8 17h5" /></>,
+  funil: <path d="M3 4h18l-6.5 8v6l-5 2v-8L3 4Z" />,
+  relatorios: <><path d="M4 20V10M11 20V4M18 20v-7" /><path d="M2 20h20" /></>,
+  config: <><circle cx="12" cy="12" r="3" /><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 17.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 7a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 2.64 1.7 1.7 0 0 0 10 1.09V1a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 7a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z" /></>,
+  search: <><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
+  upload: <><path d="M12 3v12m0 0-4-4m4 4 4-4" /><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></>,
+  copy: <><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></>,
+  edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></>,
+  more: <><circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none" /></>,
+  check: <><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></>,
+  chat: <path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-5 4V6a1 1 0 0 1 1-1Z" />,
+  crown: <path d="M2 19h20l-1.6-8.5-4.2 3.3L12 6l-4.2 7.8-4.2-3.3L2 19z" fill="currentColor" stroke="none" />,
 };
+const Butterfly = () => (
+  <svg viewBox="0 0 24 24" className="logo-butterfly" title="borboleta">
+    <path d="M12 12c-1.5-4-6-6-8-4.5-1.6 1.2-1 5 2.3 6.8C9 15.8 12 13.5 12 12zm0 0c1.5-4 6-6 8-4.5 1.6 1.2 1 5-2.3 6.8C15 15.8 12 13.5 12 12z" fill="currentColor" />
+    <line x1="12" y1="9" x2="12" y2="16" stroke="currentColor" strokeWidth="0.8" />
+  </svg>
+);
 
-const ORIGENS = [
-  "Indicação",
-  "Site",
-  "Redes sociais",
-  "Feira/Evento",
-  "Ligação ativa",
-  "Outro",
-];
-
-const MOTIVOS_PERDA = [
-  "Preço",
-  "Concorrente",
-  "Desistência",
-  "Sem resposta",
-  "Prazo",
-  "Sem orçamento",
-  "Outro",
-];
-
-const TIPOS_ATIVIDADE = ["Reunião", "Ligação", "Retorno", "Cobrança", "Outro"];
-
-const STATUS_ORCAMENTO = [
-  "Rascunho",
-  "Enviado",
-  "Negociação",
-  "Aprovado",
-  "Recusado",
-];
-
-const PERIODOS_META = ["Diário", "Semanal", "Mensal", "Anual"];
-
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function addDays(n) {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-function formatBRL(v) {
-  return (Number(v) || 0).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
-function formatDateBR(iso) {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-function vendedorNome(id) {
-  return VENDEDORES.find((v) => v.id === id)?.nome || "—";
-}
-
-function stageLabel(id) {
+// ===================== DONUT =====================
+function Donut({ data, centerLabel, centerSub }) {
+  const total = data.reduce((a, b) => a + b.valor, 0) || 1;
+  let acc = 0;
+  const stops = data.map((d) => {
+    const start = (acc / total) * 360; acc += d.valor; const end = (acc / total) * 360;
+    return `${d.cor} ${start}deg ${end}deg`;
+  }).join(",");
   return (
-    STAGES.find((s) => s.id === id)?.label ||
-    (id === "banco" ? "Banco de leads" : id)
+    <div className="donut-row">
+      <div className="donut" style={{ background: `conic-gradient(${stops})` }}>
+        <div className="donut-center"><b>{centerLabel}</b><span>{centerSub}</span></div>
+      </div>
+      <div className="legend">
+        {data.map((d, i) => (
+          <div className="legend-item" key={i}>
+            <span className="legend-dot" style={{ background: d.cor }}></span>
+            <span className="legend-label">{d.nome}</span>
+            <span className="legend-pct">{Math.round((d.valor / total) * 100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function mockLeads() {
-  const base = [
-    [
-      "Marcos Teixeira",
-      "Teixeira Materiais",
-      "novo_contato",
-      "morno",
-      8500,
-      "Site",
-    ],
-    [
-      "Fernanda Lima",
-      "Lima Construções",
-      "em_contato",
-      "quente",
-      15200,
-      "Indicação",
-    ],
-    [
-      "Roberto Cunha",
-      "Cunha & Filhos",
-      "orcamento_enviado",
-      "quente",
-      22000,
-      "Feira/Evento",
-    ],
-    [
-      "Juliana Prado",
-      "Prado Comércio",
-      "orcamento_enviado",
-      "morno",
-      9800,
-      "Redes sociais",
-    ],
-    [
-      "Eduardo Nunes",
-      "Nunes Serviços",
-      "negociacao",
-      "quente",
-      31000,
-      "Ligação ativa",
-    ],
-    [
-      "Patricia Gomes",
-      "Gomes Distribuidora",
-      "fechado",
-      "quente",
-      18500,
-      "Indicação",
-    ],
-    ["Sergio Barros", "Barros Ltda", "perdido", "frio", 4200, "Site"],
-    ["Camila Duarte", "Duarte & Cia", "banco", "frio", 3000, "Redes sociais"],
-    [
-      "Vinicius Rocha",
-      "Rocha Empreendimentos",
-      "banco",
-      "morno",
-      12000,
-      "Feira/Evento",
-    ],
-    ["Larissa Melo", "Melo Comercial", "banco", "frio", 5400, "Outro"],
-  ];
-  return base.map(([nome, empresa, etapa, temperatura, valor, origem], i) => ({
-    id: uid(),
-    nome,
-    empresa,
-    telefone:
-      "(51) 99" +
-      (1000 + i * 37).toString().slice(0, 4) +
-      "-" +
-      (2000 + i * 91).toString().slice(0, 4),
-    whatsapp:
-      "(51) 99" +
-      (1000 + i * 37).toString().slice(0, 4) +
-      "-" +
-      (2000 + i * 91).toString().slice(0, 4),
-    email: nome.toLowerCase().replace(/ /g, ".") + "@email.com",
-    cidade: ["Osório", "Torres", "Capão da Canoa", "Porto Alegre"][i % 4],
-    origem,
-    vendedorId: VENDEDORES[i % VENDEDORES.length].id,
-    temperatura,
-    valor,
-    etapa,
-    proximoContato:
-      etapa === "fechado" || etapa === "perdido" ? "" : addDays((i % 5) + 1),
-    observacoes: "",
-    motivoPerda: etapa === "perdido" ? "Preço" : "",
-    createdAt: addDays(-((i * 3) % 40)),
-    historico: [{ data: todayISO(), texto: "Lead cadastrado no sistema." }],
-  }));
-}
-
-function mockOrcamentos(leads) {
-  const alvo = leads.filter((l) =>
-    ["orcamento_enviado", "negociacao", "fechado"].includes(l.etapa)
-  );
-  return alvo.map((l, i) => ({
-    id: uid(),
-    numero: i + 1,
-    clienteId: l.id,
-    vendedorId: l.vendedorId,
-    data: addDays(-i * 2),
-    validade: addDays(15 - i * 2),
-    itens: [
-      {
-        id: uid(),
-        produto: "Pacote de serviços",
-        quantidade: 1,
-        valorUnitario: l.valor,
-      },
-    ],
-    desconto: 0,
-    observacoes: "",
-    status: l.etapa === "fechado" ? "Aprovado" : "Enviado",
-  }));
-}
-
-function mockAtividades(leads) {
-  return leads.slice(0, 6).map((l, i) => ({
-    id: uid(),
-    tipo: TIPOS_ATIVIDADE[i % TIPOS_ATIVIDADE.length],
-    data: addDays(i - 2),
-    hora: `${9 + i}:00`,
-    responsavelId: l.vendedorId,
-    observacao: `${TIPOS_ATIVIDADE[i % TIPOS_ATIVIDADE.length]} com ${l.nome}`,
-    status: i < 2 ? "concluido" : "pendente",
-    clienteId: l.id,
-  }));
-}
-
-function mockMetas() {
-  return VENDEDORES.map((v, i) => ({
-    id: uid(),
-    vendedorId: v.id,
-    periodo: "Mensal",
-    valor: 20000 + i * 5000,
-  }));
-}
-
-function buildInitialState() {
-  const leads = mockLeads();
-  return {
-    leads,
-    orcamentos: mockOrcamentos(leads),
-    atividades: mockAtividades(leads),
-    metas: mockMetas(),
-    nextOrcamento: mockOrcamentos(leads).length + 1,
+// ===================== TOAST =====================
+function useToast() {
+  const [msg, setMsg] = useState("");
+  const [show, setShow] = useState(false);
+  const timer = useRef(null);
+  const fire = (text) => {
+    setMsg(text); setShow(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setShow(false), 2200);
   };
+  return { msg, show, fire };
 }
 
-function TempBadge({ temperatura, size = "sm" }) {
-  const cfg = TEMP_CONFIG[temperatura] || TEMP_CONFIG.frio;
-  const Icon = cfg.icon;
-  const pad = size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-sm";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full bg-${cfg.color}-100 text-${cfg.color}-700 ${pad} font-medium`}
-    >
-      <Icon size={size === "sm" ? 12 : 14} />
-      {cfg.label}
-    </span>
-  );
+function copyRow(obj, fire) {
+  const text = Object.entries(obj).map(([k, v]) => `${k}: ${v}`).join("\n");
+  navigator.clipboard.writeText(text)
+    .then(() => fire("Dados copiados!"))
+    .catch(() => fire("Não foi possível copiar."));
 }
 
-function StatCard({ label, value, sub, tone = "slate" }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col gap-1">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
-      <span
-        className={`text-2xl font-semibold text-${tone}-900`}
-        style={{ fontFamily: "var(--font-display)" }}
-      >
-        {value}
-      </span>
-      {sub && <span className="text-xs text-slate-400">{sub}</span>}
-    </div>
-  );
-}
+// ===================== APP =====================
+export default function App() {
+  const [page, setPage] = useState("inicio");
+  const [clientes, setClientes] = useState(initialClientes);
+  const [contatos, setContatos] = useState(initialContatos);
+  const [orcamentos, setOrcamentos] = useState(initialOrcamentos);
+  const toast = useToast();
 
-function Toast({ message }) {
-  if (!message) return null;
-  return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50">
-      {message}
-    </div>
-  );
-}
+  // filtros
+  const [fCli, setFCli] = useState({ search: "", status: "", from: "", to: "" });
+  const [fCon, setFCon] = useState({ search: "", status: "", origem: "" });
+  const [fOrc, setFOrc] = useState({ search: "", status: "", from: "", to: "" });
 
-function Modal({ title, onClose, children, wide }) {
-  return (
-    <div
-      className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className={`bg-white rounded-xl shadow-xl w-full ${
-          wide ? "max-w-2xl" : "max-w-md"
-        } max-h-[90vh] overflow-y-auto`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white">
-          <h3 className="font-semibold text-slate-800">{title}</h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
-  );
-}
+  // importação
+  const [importOpen, setImportOpen] = useState(false);
+  const [importTarget, setImportTarget] = useState(null);
+  const [importRows, setImportRows] = useState([]);
+  const [fileName, setFileName] = useState("");
+  const fileRef = useRef(null);
 
-function Field({ label, children }) {
-  return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="text-slate-600 font-medium">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputCls =
-  "border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500";
-
-function LeadFormModal({ initial, onClose, onSave }) {
-  const [form, setForm] = useState(
-    initial || {
-      nome: "",
-      empresa: "",
-      telefone: "",
-      whatsapp: "",
-      email: "",
-      cidade: "",
-      origem: ORIGENS[0],
-      vendedorId: VENDEDORES[0].id,
-      temperatura: "morno",
-      valor: "",
-      proximoContato: "",
-      observacoes: "",
+  useEffect(() => {
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     }
-  );
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  }, []);
 
-  return (
-    <Modal
-      title={initial ? "Editar cliente/lead" : "Novo cliente/lead"}
-      onClose={onClose}
-      wide
-    >
-      <form
-        className="grid grid-cols-2 gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!form.nome.trim()) return;
-          onSave(form);
-        }}
-      >
-        <Field label="Nome">
-          <input
-            className={inputCls}
-            value={form.nome}
-            onChange={set("nome")}
-            required
-          />
-        </Field>
-        <Field label="Empresa">
-          <input
-            className={inputCls}
-            value={form.empresa}
-            onChange={set("empresa")}
-          />
-        </Field>
-        <Field label="Telefone">
-          <input
-            className={inputCls}
-            value={form.telefone}
-            onChange={set("telefone")}
-          />
-        </Field>
-        <Field label="WhatsApp">
-          <input
-            className={inputCls}
-            value={form.whatsapp}
-            onChange={set("whatsapp")}
-          />
-        </Field>
-        <Field label="E-mail">
-          <input
-            className={inputCls}
-            type="email"
-            value={form.email}
-            onChange={set("email")}
-          />
-        </Field>
-        <Field label="Cidade">
-          <input
-            className={inputCls}
-            value={form.cidade}
-            onChange={set("cidade")}
-          />
-        </Field>
-        <Field label="Origem do lead">
-          <select
-            className={inputCls}
-            value={form.origem}
-            onChange={set("origem")}
-          >
-            {ORIGENS.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Vendedor responsável">
-          <select
-            className={inputCls}
-            value={form.vendedorId}
-            onChange={set("vendedorId")}
-          >
-            {VENDEDORES.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nome}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Temperatura">
-          <select
-            className={inputCls}
-            value={form.temperatura}
-            onChange={set("temperatura")}
-          >
-            {Object.entries(TEMP_CONFIG).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Valor da oportunidade (R$)">
-          <input
-            className={inputCls}
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.valor}
-            onChange={set("valor")}
-          />
-        </Field>
-        <Field label="Próximo contato">
-          <input
-            className={inputCls}
-            type="date"
-            value={form.proximoContato}
-            onChange={set("proximoContato")}
-          />
-        </Field>
-        <div />
-        <div className="col-span-2">
-          <Field label="Observações internas">
-            <textarea
-              className={inputCls}
-              rows={3}
-              value={form.observacoes}
-              onChange={set("observacoes")}
-            />
-          </Field>
-        </div>
-        <div className="col-span-2 flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm rounded-lg bg-teal-700 text-white hover:bg-teal-800"
-          >
-            Salvar
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
+  const todayLabel = new Date()
+    .toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })
+    .replace(/^\w/, (c) => c.toUpperCase());
 
-function LeadDetailModal({
-  lead,
-  onClose,
-  onEdit,
-  onCopy,
-  onChangeStage,
-  onAddToFunnel,
-}) {
-  if (!lead) return null;
-  return (
-    <Modal title={lead.nome} onClose={onClose} wide>
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <TempBadge temperatura={lead.temperatura} />
-        <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1 font-medium">
-          {stageLabel(lead.etapa)}
-        </span>
-        <span className="text-xs bg-teal-50 text-teal-800 rounded-full px-2.5 py-1 font-medium">
-          {formatBRL(lead.valor)}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-        <div className="flex items-center gap-2 text-slate-600">
-          <Building2 size={14} />
-          {lead.empresa || "—"}
-        </div>
-        <div className="flex items-center gap-2 text-slate-600">
-          <MapPin size={14} />
-          {lead.cidade || "—"}
-        </div>
-        <div className="flex items-center gap-2 text-slate-600">
-          <Phone size={14} />
-          {lead.telefone || "—"}
-        </div>
-        <div className="flex items-center gap-2 text-slate-600">
-          <MessageCircle size={14} />
-          {lead.whatsapp || "—"}
-        </div>
-        <div className="flex items-center gap-2 text-slate-600">
-          <Mail size={14} />
-          {lead.email || "—"}
-        </div>
-        <div className="flex items-center gap-2 text-slate-600">
-          Vendedor: {vendedorNome(lead.vendedorId)}
-        </div>
-        <div className="flex items-center gap-2 text-slate-600">
-          Origem: {lead.origem}
-        </div>
-        <div className="flex items-center gap-2 text-slate-600">
-          Próximo contato: {formatDateBR(lead.proximoContato)}
-        </div>
-      </div>
-      {lead.observacoes && (
-        <div className="mb-4 text-sm">
-          <p className="text-slate-500 font-medium mb-1">
-            Observações internas
-          </p>
-          <p className="text-slate-700 bg-slate-50 rounded-lg p-3">
-            {lead.observacoes}
-          </p>
-        </div>
-      )}
-      {lead.motivoPerda && (
-        <div className="mb-4 text-sm flex items-center gap-2 text-rose-700 bg-rose-50 rounded-lg p-3">
-          <AlertTriangle size={14} /> Motivo da perda: {lead.motivoPerda}
-        </div>
-      )}
-      <div className="mb-4">
-        <p className="text-slate-500 font-medium mb-1 text-sm">
-          Histórico de atividades
-        </p>
-        <ul className="text-sm space-y-1 max-h-32 overflow-y-auto">
-          {(lead.historico || [])
-            .slice()
-            .reverse()
-            .map((h, i) => (
-              <li key={i} className="text-slate-600 flex gap-2">
-                <span className="text-slate-400 shrink-0">
-                  {formatDateBR(h.data)}
-                </span>
-                <span>{h.texto}</span>
-              </li>
-            ))}
-        </ul>
-      </div>
-      <div className="flex flex-wrap gap-2 justify-between items-center pt-3 border-t border-slate-100">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Etapa:</span>
-          <select
-            className="border border-slate-300 rounded-lg px-2 py-1.5 text-xs"
-            value={lead.etapa}
-            onChange={(e) => onChangeStage(lead, e.target.value)}
-          >
-            <option value="banco">Banco de leads</option>
-            {STAGES.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex gap-2">
-          {lead.etapa === "banco" && (
-            <button
-              onClick={() => onAddToFunnel(lead)}
-              className="px-3 py-1.5 text-xs rounded-lg bg-teal-700 text-white hover:bg-teal-800 flex items-center gap-1"
-            >
-              <ArrowRight size={13} /> Adicionar ao funil
-            </button>
-          )}
-          <button
-            onClick={() => onCopy(lead)}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center gap-1"
-          >
-            <Copy size={13} /> Copiar informações
-          </button>
-          <button
-            onClick={() => onEdit(lead)}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center gap-1"
-          >
-            <Pencil size={13} /> Editar
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
+  // ---------- listas filtradas ----------
+  const clientesFiltrados = useMemo(() => clientes.filter((c) => {
+    const s = fCli.search.toLowerCase();
+    const okSearch = !s || c.nome.toLowerCase().includes(s) || c.telefone.includes(s) || c.cidade.toLowerCase().includes(s);
+    const okStatus = !fCli.status || c.status === fCli.status;
+    const okFrom = !fCli.from || c.ultimoContato >= fCli.from;
+    const okTo = !fCli.to || c.ultimoContato <= fCli.to;
+    return okSearch && okStatus && okFrom && okTo;
+  }), [clientes, fCli]);
 
-function LossReasonModal({ onClose, onConfirm }) {
-  const [motivo, setMotivo] = useState(MOTIVOS_PERDA[0]);
-  return (
-    <Modal title="Motivo da perda" onClose={onClose}>
-      <p className="text-sm text-slate-500 mb-3">
-        Selecione o motivo pelo qual essa oportunidade foi perdida.
-      </p>
-      <select
-        className={inputCls + " w-full mb-4"}
-        value={motivo}
-        onChange={(e) => setMotivo(e.target.value)}
-      >
-        {MOTIVOS_PERDA.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={() => onConfirm(motivo)}
-          className="px-4 py-2 text-sm rounded-lg bg-rose-600 text-white hover:bg-rose-700"
-        >
-          Confirmar perda
-        </button>
-      </div>
-    </Modal>
-  );
-}
+  const contatosFiltrados = useMemo(() => contatos.filter((c) => {
+    const s = fCon.search.toLowerCase();
+    const okSearch = !s || c.nome.toLowerCase().includes(s) || c.telefone.includes(s) || c.origem.toLowerCase().includes(s);
+    const okStatus = !fCon.status || c.status === fCon.status;
+    const okOrigem = !fCon.origem || c.origem === fCon.origem;
+    return okSearch && okStatus && okOrigem;
+  }), [contatos, fCon]);
 
-function AtividadeFormModal({
-  onClose,
-  onSave,
-  clientes,
-  presetClienteId,
-  presetTipo,
-}) {
-  const presetCliente = clientes.find((c) => c.id === presetClienteId);
-  const [form, setForm] = useState({
-    tipo: presetTipo || TIPOS_ATIVIDADE[0],
-    data: todayISO(),
-    hora: "09:00",
-    responsavelId: presetCliente?.vendedorId || VENDEDORES[0].id,
-    observacao: presetCliente ? `Retorno para ${presetCliente.nome}` : "",
-    clienteId: presetClienteId || "",
-    status: "pendente",
-  });
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  return (
-    <Modal title="Nova atividade" onClose={onClose}>
-      <form
-        className="grid grid-cols-2 gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSave(form);
-        }}
-      >
-        <Field label="Tipo">
-          <select className={inputCls} value={form.tipo} onChange={set("tipo")}>
-            {TIPOS_ATIVIDADE.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Cliente/lead">
-          <select
-            className={inputCls}
-            value={form.clienteId}
-            onChange={set("clienteId")}
-          >
-            <option value="">Nenhum</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Data">
-          <input
-            className={inputCls}
-            type="date"
-            value={form.data}
-            onChange={set("data")}
-            required
-          />
-        </Field>
-        <Field label="Horário">
-          <input
-            className={inputCls}
-            type="time"
-            value={form.hora}
-            onChange={set("hora")}
-            required
-          />
-        </Field>
-        <Field label="Responsável">
-          <select
-            className={inputCls}
-            value={form.responsavelId}
-            onChange={set("responsavelId")}
-          >
-            {VENDEDORES.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nome}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Status">
-          <select
-            className={inputCls}
-            value={form.status}
-            onChange={set("status")}
-          >
-            <option value="pendente">Pendente</option>
-            <option value="concluido">Concluído</option>
-          </select>
-        </Field>
-        <div className="col-span-2">
-          <Field label="Observação">
-            <textarea
-              className={inputCls}
-              rows={2}
-              value={form.observacao}
-              onChange={set("observacao")}
-            />
-          </Field>
-        </div>
-        <div className="col-span-2 flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm rounded-lg bg-teal-700 text-white hover:bg-teal-800"
-          >
-            Salvar
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
+  const orcamentosFiltrados = useMemo(() => orcamentos.filter((o) => {
+    const s = fOrc.search.toLowerCase();
+    const okSearch = !s || o.cliente.toLowerCase().includes(s) || o.produto.toLowerCase().includes(s) || o.numero.includes(s);
+    const okStatus = !fOrc.status || o.status === fOrc.status;
+    const okFrom = !fOrc.from || o.data >= fOrc.from;
+    const okTo = !fOrc.to || o.data <= fOrc.to;
+    return okSearch && okStatus && okFrom && okTo;
+  }), [orcamentos, fOrc]);
 
-function OrcamentoFormModal({
-  onClose,
-  onSave,
-  clientes,
-  numero,
-  presetClienteId,
-}) {
-  const [clienteId, setClienteId] = useState(
-    presetClienteId || clientes[0]?.id || ""
-  );
-  const [vendedorId, setVendedorId] = useState(
-    clientes.find((c) => c.id === (presetClienteId || clientes[0]?.id))
-      ?.vendedorId || VENDEDORES[0].id
-  );
-  const [data, setData] = useState(todayISO());
-  const [validade, setValidade] = useState(addDays(15));
-  const [desconto, setDesconto] = useState(0);
-  const [observacoes, setObservacoes] = useState("");
-  const [itens, setItens] = useState([
-    { id: uid(), produto: "", quantidade: 1, valorUnitario: 0 },
-  ]);
+  // ---------- estatísticas ----------
+  const emAtendimento = clientes.filter((c) => c.status === "Em atendimento").length;
+  const orcEnviados = orcamentos.filter((o) => o.status === "Enviado").length;
+  const vendasFechadas = orcamentos.filter((o) => o.status === "Aprovado").length;
+  const metaAlvo = 20;
 
-  const total = useMemo(() => {
-    const soma = itens.reduce(
-      (s, i) =>
-        s + (Number(i.quantidade) || 0) * (Number(i.valorUnitario) || 0),
-      0
-    );
-    return Math.max(soma - (Number(desconto) || 0), 0);
-  }, [itens, desconto]);
+  const resumoVendas = [
+    { nome: "Fechadas", valor: vendasFechadas, cor: "#D4A537" },
+    { nome: "Em negociação", valor: clientes.filter((c) => c.status === "Em negociação").length, cor: "#4FA3F7" },
+    { nome: "Proposta", valor: clientes.filter((c) => c.status === "Proposta").length, cor: "#B694F5" },
+    { nome: "Sem retorno", valor: Math.max(clientes.filter((c) => c.status === "Sem retorno").length, 0.001), cor: "#4A4E5C" },
+  ];
 
-  const updateItem = (id, key, value) =>
-    setItens((its) =>
-      its.map((i) => (i.id === id ? { ...i, [key]: value } : i))
-    );
-  const addItem = () =>
-    setItens((its) => [
-      ...its,
-      { id: uid(), produto: "", quantidade: 1, valorUnitario: 0 },
-    ]);
-  const removeItem = (id) =>
-    setItens((its) => (its.length > 1 ? its.filter((i) => i.id !== id) : its));
+  const fechadasFunil = funilEtapas[funilEtapas.length - 1].valor;
+  const inicialFunil = funilEtapas[0].valor;
+  const maxFunil = funilEtapas[0].valor;
 
-  return (
-    <Modal
-      title={`Novo orçamento — #${String(numero).padStart(6, "0")}`}
-      onClose={onClose}
-      wide
-    >
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!clienteId) return;
-          onSave({
-            clienteId,
-            vendedorId,
-            data,
-            validade,
-            desconto: Number(desconto) || 0,
-            observacoes,
-            itens,
-            valorTotal: total,
-            status: "Rascunho",
-          });
-        }}
-      >
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Cliente">
-            <select
-              className={inputCls}
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-              required
-            >
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Vendedor">
-            <select
-              className={inputCls}
-              value={vendedorId}
-              onChange={(e) => setVendedorId(e.target.value)}
-            >
-              {VENDEDORES.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.nome}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Data">
-            <input
-              className={inputCls}
-              type="date"
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-            />
-          </Field>
-          <Field label="Validade">
-            <input
-              className={inputCls}
-              type="date"
-              value={validade}
-              onChange={(e) => setValidade(e.target.value)}
-            />
-          </Field>
-        </div>
+  const totalVendasRel = orcamentos.filter((o) => o.status === "Aprovado").reduce((a, b) => a + b.valor, 0);
+  const aprovadosCount = orcamentos.filter((o) => o.status === "Aprovado").length || 1;
+  const maxVendasPeriodo = Math.max(...vendasPeriodo.map((v) => v.valor));
 
-        <div>
-          <p className="text-sm font-medium text-slate-600 mb-2">
-            Produtos / serviços
-          </p>
-          <div className="flex flex-col gap-2">
-            {itens.map((item) => (
-              <div
-                key={item.id}
-                className="grid gap-2 items-center"
-                style={{ gridTemplateColumns: "1fr 80px 120px 90px 28px" }}
-              >
-                <input
-                  className={inputCls}
-                  placeholder="Produto ou serviço"
-                  value={item.produto}
-                  onChange={(e) =>
-                    updateItem(item.id, "produto", e.target.value)
-                  }
-                />
-                <input
-                  className={inputCls}
-                  type="number"
-                  min="1"
-                  value={item.quantidade}
-                  onChange={(e) =>
-                    updateItem(item.id, "quantidade", e.target.value)
-                  }
-                />
-                <input
-                  className={inputCls}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={item.valorUnitario}
-                  onChange={(e) =>
-                    updateItem(item.id, "valorUnitario", e.target.value)
-                  }
-                />
-                <span className="text-sm text-slate-600 text-right">
-                  {formatBRL(
-                    (Number(item.quantidade) || 0) *
-                      (Number(item.valorUnitario) || 0)
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeItem(item.id)}
-                  className="text-slate-400 hover:text-rose-600"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={addItem}
-            className="mt-2 text-xs text-teal-700 font-medium flex items-center gap-1 hover:text-teal-800"
-          >
-            <Plus size={13} /> Adicionar item
-          </button>
-        </div>
+  // ---------- opções únicas p/ filtros ----------
+  const statusClientesOpts = [...new Set(clientes.map((c) => c.status))];
+  const statusContatosOpts = [...new Set(contatos.map((c) => c.status))];
+  const origemContatosOpts = [...new Set(contatos.map((c) => c.origem))];
+  const statusOrcamentosOpts = [...new Set(orcamentos.map((o) => o.status))];
 
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Desconto (R$)">
-            <input
-              className={inputCls}
-              type="number"
-              min="0"
-              step="0.01"
-              value={desconto}
-              onChange={(e) => setDesconto(e.target.value)}
-            />
-          </Field>
-          <div className="flex flex-col justify-end items-end">
-            <span className="text-xs text-slate-500">Valor total</span>
-            <span className="text-xl font-semibold text-teal-800">
-              {formatBRL(total)}
-            </span>
-          </div>
-        </div>
+  // ---------- importar ----------
+  const openImport = (target) => {
+    setImportTarget(target); setImportRows([]); setFileName(""); setImportOpen(true);
+  };
 
-        <Field label="Observações">
-          <textarea
-            className={inputCls}
-            rows={2}
-            value={observacoes}
-            onChange={(e) => setObservacoes(e.target.value)}
-          />
-        </Field>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm rounded-lg bg-teal-700 text-white hover:bg-teal-800"
-          >
-            Salvar orçamento
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function MetaFormModal({ onClose, onSave }) {
-  const [form, setForm] = useState({
-    vendedorId: VENDEDORES[0].id,
-    periodo: "Mensal",
-    valor: "",
-  });
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  return (
-    <Modal title="Nova meta" onClose={onClose}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!form.valor) return;
-          onSave(form);
-        }}
-      >
-        <Field label="Vendedor">
-          <select
-            className={inputCls}
-            value={form.vendedorId}
-            onChange={set("vendedorId")}
-          >
-            {VENDEDORES.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nome}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Período">
-          <select
-            className={inputCls}
-            value={form.periodo}
-            onChange={set("periodo")}
-          >
-            {PERIODOS_META.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Valor da meta (R$)">
-          <input
-            className={inputCls}
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.valor}
-            onChange={set("valor")}
-            required
-          />
-        </Field>
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm rounded-lg bg-teal-700 text-white hover:bg-teal-800"
-          >
-            Salvar meta
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-const NAV = [
-  { id: "dashboard", label: "Dashboard", emoji: "🏠" },
-  { id: "kanban", label: "Funil", emoji: "📊" },
-  { id: "clientes", label: "Clientes", emoji: "👥" },
-  { id: "banco", label: "Banco de Leads", emoji: "🗄️" },
-  { id: "agenda", label: "Agenda", emoji: "📅" },
-  { id: "orcamentos", label: "Orçamentos", emoji: "📄" },
-  { id: "metas", label: "Metas", emoji: "🎯" },
-];
-
-export default function CRMApp() {
-  const [empresaId, setEmpresaId] = useState(EMPRESAS[0].id);
-  const [page, setPage] = useState("dashboard");
-  const [data, setDataState] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState("");
-
-  const [leadModal, setLeadModal] = useState(null);
-  const [detailLead, setDetailLead] = useState(null);
-  const [lossPending, setLossPending] = useState(null);
-  const [atividadeModal, setAtividadeModal] = useState(null);
-  const [orcamentoModal, setOrcamentoModal] = useState(null);
-  const [metaModalOpen, setMetaModalOpen] = useState(false);
-  const [bancoModalOpen, setBancoModalOpen] = useState(false);
-
-  const [searchClientes, setSearchClientes] = useState("");
-  const [searchBanco, setSearchBanco] = useState("");
-  const [filterOrigem, setFilterOrigem] = useState("");
-  const [filterOrcamento, setFilterOrcamento] = useState("");
-
-  const storageKey = `${STORAGE_PREFIX}:${empresaId}`;
-  const loadedRef = useRef({});
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const res = await window.storage.get(storageKey, false);
-        if (!cancelled) {
-          if (res && res.value) {
-            setDataState(JSON.parse(res.value));
-          } else {
-            const initial = buildInitialState();
-            setDataState(initial);
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setDataState(buildInitialState());
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (!data || loading) return;
-    const key = storageKey;
-    (async () => {
-      try {
-        await window.storage.set(key, JSON.stringify(data), false);
-      } catch (e) {}
-    })();
-  }, [data, storageKey, loading]);
-
-  function showToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 2200);
-  }
-
-  function updateLeads(fn) {
-    setDataState((d) => ({ ...d, leads: fn(d.leads) }));
-  }
-
-  function handleSaveLead(form) {
-    if (leadModal.mode === "edit") {
-      updateLeads((leads) =>
-        leads.map((l) =>
-          l.id === leadModal.lead.id
-            ? { ...l, ...form, valor: Number(form.valor) || 0 }
-            : l
-        )
-      );
-      showToast("Cliente atualizado.");
-    } else {
-      const novo = {
-        id: uid(),
-        ...form,
-        valor: Number(form.valor) || 0,
-        etapa: leadModal.mode === "banco" ? "banco" : "novo_contato",
-        motivoPerda: "",
-        createdAt: todayISO(),
-        historico: [{ data: todayISO(), texto: "Lead cadastrado no sistema." }],
+  const handleFile = (file) => {
+    setFileName(file.name);
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ext === "csv" || ext === "xlsx" || ext === "xls") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const wb = window.XLSX.read(e.target.result, { type: "binary" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = window.XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        setImportRows(json);
       };
-      updateLeads((leads) => [novo, ...leads]);
-      showToast("Lead cadastrado.");
-    }
-    setLeadModal(null);
-  }
-
-  function applyStageChange(lead, novaEtapa) {
-    if (novaEtapa === "perdido") {
-      setLossPending({ lead, novaEtapa });
-      return;
-    }
-    updateLeads((leads) =>
-      leads.map((l) =>
-        l.id === lead.id
-          ? {
-              ...l,
-              etapa: novaEtapa,
-              historico: [
-                ...(l.historico || []),
-                {
-                  data: todayISO(),
-                  texto: `Movido para "${stageLabel(novaEtapa)}".`,
-                },
-              ],
-            }
-          : l
-      )
-    );
-    setDetailLead((d) =>
-      d && d.id === lead.id ? { ...d, etapa: novaEtapa } : d
-    );
-  }
-
-  function confirmLoss(motivo) {
-    const { lead } = lossPending;
-    updateLeads((leads) =>
-      leads.map((l) =>
-        l.id === lead.id
-          ? {
-              ...l,
-              etapa: "perdido",
-              motivoPerda: motivo,
-              historico: [
-                ...(l.historico || []),
-                {
-                  data: todayISO(),
-                  texto: `Marcado como perdido — motivo: ${motivo}.`,
-                },
-              ],
-            }
-          : l
-      )
-    );
-    setLossPending(null);
-    setDetailLead(null);
-    showToast("Oportunidade marcada como perdida.");
-  }
-
-  function addToFunnel(lead) {
-    updateLeads((leads) =>
-      leads.map((l) =>
-        l.id === lead.id
-          ? {
-              ...l,
-              etapa: "novo_contato",
-              historico: [
-                ...(l.historico || []),
-                { data: todayISO(), texto: "Adicionado ao funil de vendas." },
-              ],
-            }
-          : l
-      )
-    );
-    setDetailLead(null);
-    setBancoModalOpen(false);
-    showToast("Lead adicionado ao funil.");
-  }
-
-  function copyLead(lead) {
-    const texto = [
-      `Nome: ${lead.nome}`,
-      `Empresa: ${lead.empresa || "-"}`,
-      `Telefone: ${lead.telefone || "-"}`,
-      `WhatsApp: ${lead.whatsapp || "-"}`,
-      `E-mail: ${lead.email || "-"}`,
-      `Cidade: ${lead.cidade || "-"}`,
-      `Origem: ${lead.origem}`,
-      `Vendedor: ${vendedorNome(lead.vendedorId)}`,
-      `Temperatura: ${TEMP_CONFIG[lead.temperatura]?.label}`,
-      `Valor da oportunidade: ${formatBRL(lead.valor)}`,
-      `Etapa atual: ${stageLabel(lead.etapa)}`,
-      `Próximo contato: ${formatDateBR(lead.proximoContato)}`,
-      `Observações: ${lead.observacoes || "-"}`,
-    ].join("\n");
-    if (navigator.clipboard) {
-      navigator.clipboard
-        .writeText(texto)
-        .then(() => showToast("Informações copiadas."));
-    }
-  }
-
-  function deleteLead(id) {
-    updateLeads((leads) => leads.filter((l) => l.id !== id));
-    showToast("Removido.");
-  }
-
-  function saveAtividade(form) {
-    setDataState((d) => ({
-      ...d,
-      atividades: [{ id: uid(), ...form }, ...d.atividades],
-    }));
-    setAtividadeModal(null);
-    showToast("Atividade agendada.");
-  }
-
-  function toggleAtividade(id) {
-    setDataState((d) => ({
-      ...d,
-      atividades: d.atividades.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status: a.status === "concluido" ? "pendente" : "concluido",
-            }
-          : a
-      ),
-    }));
-  }
-
-  function saveOrcamento(form) {
-    setDataState((d) => ({
-      ...d,
-      orcamentos: [
-        { id: uid(), numero: d.nextOrcamento, ...form },
-        ...d.orcamentos,
-      ],
-      nextOrcamento: d.nextOrcamento + 1,
-    }));
-    setOrcamentoModal(null);
-    showToast(
-      `Orçamento #${String(data.nextOrcamento).padStart(6, "0")} criado.`
-    );
-  }
-
-  function updateOrcamentoStatus(id, status) {
-    setDataState((d) => ({
-      ...d,
-      orcamentos: d.orcamentos.map((o) => (o.id === id ? { ...o, status } : o)),
-    }));
-  }
-
-  function saveMeta(form) {
-    setDataState((d) => ({
-      ...d,
-      metas: [
-        {
-          id: uid(),
-          vendedorId: form.vendedorId,
-          periodo: form.periodo,
-          valor: Number(form.valor) || 0,
-        },
-        ...d.metas,
-      ],
-    }));
-    setMetaModalOpen(false);
-    showToast("Meta cadastrada.");
-  }
-
-  function deleteMeta(id) {
-    setDataState((d) => ({ ...d, metas: d.metas.filter((m) => m.id !== id) }));
-  }
-
-  if (loading || !data) {
-    return (
-      <div className="flex items-center justify-center h-96 text-slate-400 text-sm">
-        Carregando…
-      </div>
-    );
-  }
-
-  const clientesFunil = data.leads.filter((l) => l.etapa !== "banco");
-  const bancoLeads = data.leads.filter((l) => l.etapa === "banco");
-
-  return (
-    <div
-      className="w-full min-h-[600px] bg-slate-50 text-slate-800"
-      style={{ fontFamily: "var(--font-body)" }}
-    >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
-        :root { --font-display: 'Sora', sans-serif; --font-body: 'Inter', sans-serif; }
-        .crm-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
-        .crm-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .crm-sidebar { display: flex; flex-direction: column; gap: 4px; width: 224px; }
-        .crm-nav-btn { display: flex; flex-direction: row; width: 100%; text-align: left; }
-        @media (max-width: 640px) {
-          .crm-sidebar { width: 64px; }
-          .crm-sidebar-empresa { display: none; }
-          .crm-nav-btn { justify-content: center; padding-left: 0; padding-right: 0; }
-          .crm-nav-label { display: none; }
+      reader.readAsBinaryString(file);
+    } else if (ext === "pdf") {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const pdf = await window.pdfjsLib.getDocument({ data: e.target.result }).promise;
+          let lines = [];
+          for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const text = content.items.map((i) => i.str).join(" ");
+            lines.push(...text.split(/\n|(?<=\.)\s{2,}/).filter(Boolean));
+          }
+          setImportRows(lines.filter((l) => l.trim()).map((l) => ({ texto: l.trim() })));
+        } catch (err) {
+          setImportRows([]);
         }
-      `}</style>
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  };
 
-      <Toast message={toast} />
+  const confirmImport = () => {
+    if (!importRows.length) return;
+    if (importTarget === "clientes") {
+      const novos = importRows.map((r) => ({
+        nome: r.Nome || r.nome || r.texto || "Sem nome",
+        telefone: r.Telefone || r.telefone || "-",
+        cidade: r.Cidade || r.cidade || "-",
+        status: r.Status || r.status || "Contato inicial",
+        ultimoContato: todayISO(),
+      }));
+      setClientes((prev) => [...prev, ...novos]);
+    } else if (importTarget === "contatos") {
+      const novos = importRows.map((r) => ({
+        nome: r.Nome || r.nome || r.texto || "Sem nome",
+        telefone: r.Telefone || r.telefone || "-",
+        origem: r.Origem || r.origem || "Site",
+        status: r.Status || r.status || "Novo contato",
+      }));
+      setContatos((prev) => [...prev, ...novos]);
+    } else if (importTarget === "orcamentos") {
+      const novos = importRows.map((r, i) => ({
+        numero: r.Numero || r.numero || String(orcamentos.length + i + 1).padStart(4, "0"),
+        cliente: r.Cliente || r.cliente || r.texto || "Sem cliente",
+        produto: r.Produto || r.produto || "-",
+        valor: Number(r.Valor || r.valor || 0),
+        status: r.Status || r.status || "Enviado",
+        data: todayISO(),
+      }));
+      setOrcamentos((prev) => [...prev, ...novos]);
+    }
+    setImportOpen(false);
+    toast.fire(`${importRows.length} registro(s) adicionado(s)!`);
+  };
 
-      {leadModal && (
-        <LeadFormModal
-          initial={leadModal.mode === "edit" ? leadModal.lead : null}
-          onClose={() => setLeadModal(null)}
-          onSave={handleSaveLead}
-        />
-      )}
-      {detailLead && (
-        <LeadDetailModal
-          lead={data.leads.find((l) => l.id === detailLead.id) || detailLead}
-          onClose={() => setDetailLead(null)}
-          onEdit={(l) => {
-            setDetailLead(null);
-            setLeadModal({ mode: "edit", lead: l });
-          }}
-          onCopy={copyLead}
-          onChangeStage={applyStageChange}
-          onAddToFunnel={addToFunnel}
-        />
-      )}
-      {lossPending && (
-        <LossReasonModal
-          onClose={() => setLossPending(null)}
-          onConfirm={confirmLoss}
-        />
-      )}
-      {atividadeModal && (
-        <AtividadeFormModal
-          onClose={() => setAtividadeModal(null)}
-          onSave={saveAtividade}
-          clientes={data.leads}
-          presetClienteId={atividadeModal.clienteId}
-          presetTipo={atividadeModal.tipo}
-        />
-      )}
-      {orcamentoModal && (
-        <OrcamentoFormModal
-          onClose={() => setOrcamentoModal(null)}
-          onSave={saveOrcamento}
-          clientes={data.leads}
-          numero={data.nextOrcamento}
-          presetClienteId={orcamentoModal.clienteId}
-        />
-      )}
-      {metaModalOpen && (
-        <MetaFormModal
-          onClose={() => setMetaModalOpen(false)}
-          onSave={saveMeta}
-        />
-      )}
-
-      <div className="flex">
-        {/* Sidebar — sempre vertical */}
-        <aside className="crm-sidebar shrink-0 bg-slate-900 text-slate-300 min-h-[600px] py-5 px-3">
-          <div className="crm-sidebar-empresa mb-6">
-            <select
-              value={empresaId}
-              onChange={(e) => setEmpresaId(e.target.value)}
-              className="w-full bg-slate-800 text-white text-sm rounded-lg px-2 py-2 border border-slate-700"
-            >
-              {EMPRESAS.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nome}
-                </option>
-              ))}
-            </select>
+  // ===================== RENDER =====================
+  return (
+    <div className="app">
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+        <div className="logo">
+          <div className="logo-badge">
+            <Icon path={icons.crown} size={30} />
+            <Butterfly />
           </div>
-          {NAV.map((n) => {
-            const active = page === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => setPage(n.id)}
-                className={`crm-nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-teal-700 text-white"
-                    : "hover:bg-slate-800 text-slate-300"
-                }`}
-              >
-                <span className="text-base leading-none">{n.emoji}</span>
-                <span className="crm-nav-label">{n.label}</span>
-              </button>
-            );
-          })}
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 min-w-0 p-4 md:p-6">
-          {page === "dashboard" && <Dashboard data={data} />}
-
-          {page === "kanban" && (
-            <Kanban
-              leads={clientesFunil}
-              onDropStage={applyStageChange}
-              onOpen={setDetailLead}
-              onNew={() => setLeadModal({ mode: "novo" })}
-            />
-          )}
-
-          {page === "clientes" && (
-            <ClientesList
-              leads={clientesFunil}
-              search={searchClientes}
-              setSearch={setSearchClientes}
-              onOpen={setDetailLead}
-              onNew={() => setLeadModal({ mode: "novo" })}
-              onEdit={(l) => setLeadModal({ mode: "edit", lead: l })}
-              onDelete={deleteLead}
-              onCopy={copyLead}
-              onCreateOrcamento={(l) => setOrcamentoModal({ clienteId: l.id })}
-              onScheduleRetorno={(l) =>
-                setAtividadeModal({ clienteId: l.id, tipo: "Retorno" })
-              }
-            />
-          )}
-
-          {page === "banco" && (
-            <BancoLeads
-              leads={bancoLeads}
-              search={searchBanco}
-              setSearch={setSearchBanco}
-              filterOrigem={filterOrigem}
-              setFilterOrigem={setFilterOrigem}
-              onOpen={setDetailLead}
-              onNew={() => setLeadModal({ mode: "banco" })}
-              onEdit={(l) => setLeadModal({ mode: "edit", lead: l })}
-              onDelete={deleteLead}
-              onAddToFunnel={addToFunnel}
-            />
-          )}
-
-          {page === "agenda" && (
-            <Agenda
-              atividades={data.atividades}
-              leads={data.leads}
-              onNew={() => setAtividadeModal({})}
-              onToggle={toggleAtividade}
-            />
-          )}
-
-          {page === "orcamentos" && (
-            <Orcamentos
-              orcamentos={data.orcamentos}
-              leads={data.leads}
-              filter={filterOrcamento}
-              setFilter={setFilterOrcamento}
-              onNew={() => setOrcamentoModal({})}
-              onStatusChange={updateOrcamentoStatus}
-            />
-          )}
-
-          {page === "metas" && (
-            <Metas
-              metas={data.metas}
-              leads={data.leads}
-              onNew={() => setMetaModalOpen(true)}
-              onDelete={deleteMeta}
-            />
-          )}
-        </main>
-      </div>
-    </div>
-  );
-}
-
-function Dashboard({ data }) {
-  const { leads, orcamentos, metas } = data;
-  const fechados = leads.filter((l) => l.etapa === "fechado");
-  const perdidos = leads.filter((l) => l.etapa === "perdido");
-  const ativos = leads.filter(
-    (l) => !["banco", "fechado", "perdido"].includes(l.etapa)
-  );
-  const valorAberto = ativos.reduce((s, l) => s + (Number(l.valor) || 0), 0);
-  const valorFechado = fechados.reduce((s, l) => s + (Number(l.valor) || 0), 0);
-  const startMonth = new Date();
-  startMonth.setDate(1);
-  const clientesNovos = leads.filter(
-    (l) => l.etapa !== "banco" && new Date(l.createdAt) >= startMonth
-  ).length;
-  const taxaConversao =
-    fechados.length + perdidos.length > 0
-      ? Math.round(
-          (fechados.length / (fechados.length + perdidos.length)) * 100
-        )
-      : 0;
-  const metaMedia =
-    metas.length > 0
-      ? Math.round(
-          metas.reduce((s, m) => {
-            const realizado = fechados
-              .filter((l) => l.vendedorId === m.vendedorId)
-              .reduce((s2, l) => s2 + l.valor, 0);
-            return (
-              s + (m.valor > 0 ? Math.min(100, (realizado / m.valor) * 100) : 0)
-            );
-          }, 0) / metas.length
-        )
-      : 0;
-
-  return (
-    <div className="flex flex-col gap-6">
-      <h2
-        className="text-lg font-semibold text-slate-800"
-        style={{ fontFamily: "var(--font-display)" }}
-      >
-        Dashboard
-      </h2>
-      <p className="text-sm text-slate-400 -mt-4">
-        Resumo geral do período atual.
-      </p>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard
-          label="Vendas"
-          value={fechados.length}
-          sub={`${fechados.length} fechadas`}
-          tone="emerald"
-        />
-        <StatCard label="Valor vendido" value={formatBRL(valorFechado)} />
-        <StatCard
-          label="Oportunidades"
-          value={ativos.length}
-          sub={formatBRL(valorAberto)}
-        />
-        <StatCard label="Orçamentos" value={orcamentos.length} />
-        <StatCard
-          label="Clientes novos"
-          value={clientesNovos}
-          sub="neste mês"
-        />
-        <StatCard label="Conversão" value={`${taxaConversao}%`} />
-        <StatCard
-          label="Metas"
-          value={`${metaMedia}%`}
-          sub={`${metas.length} meta(s) cadastrada(s)`}
-          tone="amber"
-        />
-      </div>
-    </div>
-  );
-}
-
-function KanbanCard({ lead, onOpen }) {
-  return (
-    <div
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData("text/lead-id", lead.id)}
-      onClick={() => onOpen(lead)}
-      className="bg-white rounded-lg border border-slate-200 p-3 cursor-pointer hover:border-teal-400 hover:shadow-sm transition-all"
-    >
-      <p className="text-sm font-medium text-slate-800 truncate">{lead.nome}</p>
-      <p className="text-xs text-slate-400 truncate mb-2">
-        {vendedorNome(lead.vendedorId)}
-      </p>
-      <div className="flex items-center justify-between">
-        <TempBadge temperatura={lead.temperatura} />
-        <span className="text-xs font-semibold text-slate-700">
-          {formatBRL(lead.valor)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Kanban({ leads, onDropStage, onOpen, onNew }) {
-  const [dragOver, setDragOver] = useState(null);
-
-  function handleDrop(e, stageId) {
-    e.preventDefault();
-    setDragOver(null);
-    const id = e.dataTransfer.getData("text/lead-id");
-    const lead = leads.find((l) => l.id === id);
-    if (lead && lead.etapa !== stageId) onDropStage(lead, stageId);
-  }
-
-  return (
-    <div className="flex flex-col gap-4 h-full">
-      <div className="flex items-center justify-between">
-        <h2
-          className="text-lg font-semibold text-slate-800"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Funil
-        </h2>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-1.5 bg-teal-700 text-white text-sm px-3 py-2 rounded-lg hover:bg-teal-800"
-        >
-          <Plus size={15} /> Novo lead
-        </button>
-      </div>
-      <div className="flex gap-3 overflow-x-auto crm-scroll pb-2">
-        {STAGES.map((stage) => {
-          const items = leads.filter((l) => l.etapa === stage.id);
-          const total = items.reduce((s, l) => s + l.valor, 0);
-          return (
-            <div
-              key={stage.id}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(stage.id);
-              }}
-              onDragLeave={() => setDragOver(null)}
-              onDrop={(e) => handleDrop(e, stage.id)}
-              className={`flex flex-col shrink-0 w-64 rounded-xl p-2 ${
-                dragOver === stage.id
-                  ? "bg-teal-50 ring-2 ring-teal-300"
-                  : "bg-slate-100"
-              }`}
-            >
-              <div className="flex items-center justify-between px-1 pb-2">
-                <span className="text-xs font-semibold text-slate-600">
-                  {stage.label}
-                </span>
-                <span className="text-xs text-slate-400">{items.length}</span>
-              </div>
-              <p className="text-xs text-slate-400 px-1 pb-2">
-                {formatBRL(total)}
-              </p>
-              <div className="flex flex-col gap-2 min-h-[80px]">
-                {items.map((lead) => (
-                  <KanbanCard key={lead.id} lead={lead} onOpen={onOpen} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ClientesList({
-  leads,
-  search,
-  setSearch,
-  onOpen,
-  onNew,
-  onEdit,
-  onDelete,
-  onCopy,
-  onCreateOrcamento,
-  onScheduleRetorno,
-}) {
-  const filtered = leads.filter((l) =>
-    (l.nome + l.empresa).toLowerCase().includes(search.toLowerCase())
-  );
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2
-          className="text-lg font-semibold text-slate-800"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Clientes e leads
-        </h2>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-1.5 bg-teal-700 text-white text-sm px-3 py-2 rounded-lg hover:bg-teal-800"
-        >
-          <Plus size={15} /> Novo cliente
-        </button>
-      </div>
-      <div className="relative max-w-xs">
-        <Search
-          size={15}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        />
-        <input
-          className={inputCls + " pl-9 w-full"}
-          placeholder="Buscar por nome ou empresa"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto crm-scroll">
-        <table className="w-full text-sm min-w-[860px]">
-          <thead>
-            <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
-              <th className="py-2.5 px-4 font-medium">Nome</th>
-              <th className="py-2.5 px-4 font-medium">Vendedor</th>
-              <th className="py-2.5 px-4 font-medium">Etapa</th>
-              <th className="py-2.5 px-4 font-medium">Temperatura</th>
-              <th className="py-2.5 px-4 font-medium">Valor</th>
-              <th className="py-2.5 px-4 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((l) => (
-              <tr
-                key={l.id}
-                className="border-b border-slate-50 hover:bg-slate-50"
-              >
-                <td
-                  className="py-2.5 px-4 cursor-pointer"
-                  onClick={() => onOpen(l)}
-                >
-                  <p className="font-medium text-slate-800">{l.nome}</p>
-                  <p className="text-xs text-slate-400">{l.empresa}</p>
-                </td>
-                <td className="py-2.5 px-4 text-slate-600">
-                  {vendedorNome(l.vendedorId)}
-                </td>
-                <td className="py-2.5 px-4 text-slate-600">
-                  {stageLabel(l.etapa)}
-                </td>
-                <td className="py-2.5 px-4">
-                  <TempBadge temperatura={l.temperatura} />
-                </td>
-                <td className="py-2.5 px-4 font-medium text-slate-700">
-                  {formatBRL(l.valor)}
-                </td>
-                <td className="py-2.5 px-4">
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      onClick={() => onOpen(l)}
-                      title="Visualizar"
-                      className="text-slate-400 hover:text-teal-700"
-                    >
-                      <Eye size={15} />
-                    </button>
-                    <button
-                      onClick={() => onEdit(l)}
-                      title="Editar"
-                      className="text-slate-400 hover:text-teal-700"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      onClick={() => onCopy(l)}
-                      title="Copiar informações"
-                      className="text-slate-400 hover:text-teal-700"
-                    >
-                      <Copy size={15} />
-                    </button>
-                    <button
-                      onClick={() => onCreateOrcamento(l)}
-                      title="Criar orçamento"
-                      className="text-slate-400 hover:text-teal-700"
-                    >
-                      <FileText size={15} />
-                    </button>
-                    <button
-                      onClick={() => onScheduleRetorno(l)}
-                      title="Agendar retorno"
-                      className="text-slate-400 hover:text-teal-700"
-                    >
-                      <CalendarClock size={15} />
-                    </button>
-                    <button
-                      onClick={() => onDelete(l.id)}
-                      title="Excluir"
-                      className="text-slate-400 hover:text-rose-600"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="py-8 text-center text-slate-400 text-sm"
-                >
-                  Nenhum cliente encontrado.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function BancoLeads({
-  leads,
-  search,
-  setSearch,
-  filterOrigem,
-  setFilterOrigem,
-  onOpen,
-  onNew,
-  onEdit,
-  onDelete,
-  onAddToFunnel,
-}) {
-  const filtered = leads.filter(
-    (l) =>
-      (l.nome + l.empresa).toLowerCase().includes(search.toLowerCase()) &&
-      (!filterOrigem || l.origem === filterOrigem)
-  );
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2
-            className="text-lg font-semibold text-slate-800"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            Banco de leads
-          </h2>
-          <p className="text-xs text-slate-400">
-            Leads ainda não inseridos no funil de vendas.
-          </p>
+          <div className="logo-text">
+            <span className="logo-title">CRM</span>
+            <span className="logo-sub">VENDAS</span>
+          </div>
         </div>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-1.5 bg-teal-700 text-white text-sm px-3 py-2 rounded-lg hover:bg-teal-800"
-        >
-          <UserPlus size={15} /> Adicionar lead
-        </button>
-      </div>
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative max-w-xs flex-1 min-w-[200px]">
-          <Search
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            className={inputCls + " pl-9 w-full"}
-            placeholder="Pesquisar leads"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          className={inputCls}
-          value={filterOrigem}
-          onChange={(e) => setFilterOrigem(e.target.value)}
-        >
-          <option value="">Todas as origens</option>
-          {ORIGENS.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p className="text-xs text-slate-400">
-        Estrutura pronta para importação/exportação futura via CSV/Excel.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.map((l) => (
-          <div
-            key={l.id}
-            className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col gap-2"
-          >
-            <div className="flex items-start justify-between">
-              <div className="cursor-pointer" onClick={() => onOpen(l)}>
-                <p className="font-medium text-slate-800 text-sm">{l.nome}</p>
-                <p className="text-xs text-slate-400">{l.empresa}</p>
-              </div>
-              <TempBadge temperatura={l.temperatura} />
-            </div>
-            <p className="text-xs text-slate-500">Origem: {l.origem}</p>
-            <p className="text-xs text-slate-500">
-              Vendedor: {vendedorNome(l.vendedorId)}
-            </p>
-            <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-              <span className="text-sm font-semibold text-slate-700">
-                {formatBRL(l.valor)}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onEdit(l)}
-                  className="text-slate-400 hover:text-teal-700"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => onDelete(l.id)}
-                  className="text-slate-400 hover:text-rose-600"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-            <button
-              onClick={() => onAddToFunnel(l)}
-              className="mt-1 text-xs text-teal-700 font-medium flex items-center gap-1 hover:text-teal-800"
-            >
-              <ArrowRight size={12} /> Adicionar ao funil
+        <nav className="nav">
+          {[
+            ["inicio", "Início", icons.home],
+            ["clientes", "Clientes", icons.users],
+            ["contatos", "Contatos", icons.contatos],
+            ["orcamentos", "Orçamentos", icons.file],
+            ["funil", "Funil de Vendas", icons.funil],
+            ["relatorios", "Relatórios", icons.relatorios],
+          ].map(([key, label, path]) => (
+            <button key={key} className={"nav-link" + (page === key ? " active" : "")} onClick={() => setPage(key)}>
+              <Icon path={path} size={17} /><span>{label}</span>
             </button>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-sm text-slate-400 col-span-full text-center py-8">
-            Nenhum lead encontrado.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Agenda({ atividades, leads, onNew, onToggle }) {
-  const ordenadas = [...atividades].sort((a, b) =>
-    (a.data + a.hora).localeCompare(b.data + b.hora)
-  );
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2
-          className="text-lg font-semibold text-slate-800"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Agenda
-        </h2>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-1.5 bg-teal-700 text-white text-sm px-3 py-2 rounded-lg hover:bg-teal-800"
-        >
-          <Plus size={15} /> Nova atividade
+          ))}
+        </nav>
+        <button className={"nav-link nav-config" + (page === "config" ? " active" : "")} onClick={() => setPage("config")}>
+          <Icon path={icons.config} size={17} /><span>Configurações</span>
         </button>
-      </div>
-      <div className="flex flex-col gap-2">
-        {ordenadas.map((a) => {
-          const cliente = leads.find((l) => l.id === a.clienteId);
-          return (
-            <div
-              key={a.id}
-              className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3"
-            >
-              <button
-                onClick={() => onToggle(a.id)}
-                className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                  a.status === "concluido"
-                    ? "bg-emerald-600 border-emerald-600"
-                    : "border-slate-300"
-                }`}
-              >
-                {a.status === "concluido" && (
-                  <Check size={12} className="text-white" />
-                )}
-              </button>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-medium bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">
-                    {a.tipo}
-                  </span>
-                  {cliente && (
-                    <span className="text-sm text-slate-700 font-medium">
-                      {cliente.nome}
-                    </span>
-                  )}
-                </div>
-                {a.observacao && (
-                  <p className="text-xs text-slate-500 truncate">
-                    {a.observacao}
-                  </p>
-                )}
+      </aside>
+
+      {/* MAIN */}
+      <main className="main">
+
+        {/* ---------- INÍCIO ---------- */}
+        {page === "inicio" && (
+          <section className="page active">
+            <header className="page-head">
+              <div><h1>Olá, Yasmin!</h1><p className="sub">Aqui está um resumo do seu dia.</p></div>
+              <div className="head-right"><div className="date-chip">{todayLabel}</div></div>
+            </header>
+
+            <div className="stat-grid">
+              <StatCard label="Total de Clientes" value={clientes.length} change="+12%" icon={icons.users} />
+              <StatCard label="Em Atendimento" value={emAtendimento} change="+3%" icon={icons.chat} />
+              <StatCard label="Orçamentos Enviados" value={orcEnviados} change="+25%" icon={icons.file} />
+              <StatCard label="Vendas Fechadas" value={vendasFechadas} change="+50%" icon={icons.check} />
+            </div>
+
+            <div className="grid-2">
+              <div className="card">
+                <h3>Resumo de Vendas</h3>
+                <Donut data={resumoVendas} centerLabel={vendasFechadas} centerSub="fechadas" />
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs text-slate-500 flex items-center gap-1 justify-end">
-                  <Clock size={11} />
-                  {formatDateBR(a.data)} {a.hora}
-                </p>
-                <p className="text-xs text-slate-400">
-                  {vendedorNome(a.responsavelId)}
-                </p>
+              <div className="card">
+                <h3>Meta do Mês</h3>
+                <div className="meta-numbers"><b>{vendasFechadas} / {metaAlvo}</b><span>{Math.round((vendasFechadas / metaAlvo) * 100)}%</span></div>
+                <div className="progress-track"><div className="progress-fill" style={{ width: `${(vendasFechadas / metaAlvo) * 100}%` }}></div></div>
+                <div className="meta-quote"><Icon path={icons.crown} size={18} />Disciplina hoje, vendas amanhã.</div>
               </div>
             </div>
-          );
-        })}
-        {ordenadas.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-8">
-            Nenhuma atividade agendada.
-          </p>
+          </section>
         )}
-      </div>
-    </div>
-  );
-}
 
-const STATUS_TONE = {
-  Rascunho: "slate",
-  Enviado: "sky",
-  Negociação: "amber",
-  Aprovado: "emerald",
-  Recusado: "rose",
-};
+        {/* ---------- CLIENTES ---------- */}
+        {page === "clientes" && (
+          <section className="page active">
+            <header className="page-head">
+              <div><h1>Clientes</h1><p className="sub">Gerencie seus clientes e acompanhe o histórico de cada um.</p></div>
+              <div className="head-right">
+                <button className="btn btn-outline" onClick={() => openImport("clientes")}><Icon path={icons.upload} size={15} />Importar PDF/Excel</button>
+                <button className="btn btn-gold"><Icon path={icons.plus} size={15} />Novo Cliente</button>
+              </div>
+            </header>
 
-function Orcamentos({
-  orcamentos,
-  leads,
-  filter,
-  setFilter,
-  onNew,
-  onStatusChange,
-}) {
-  const filtered = orcamentos.filter((o) => !filter || o.status === filter);
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2
-          className="text-lg font-semibold text-slate-800"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Orçamentos
-        </h2>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-1.5 bg-teal-700 text-white text-sm px-3 py-2 rounded-lg hover:bg-teal-800"
-        >
-          <Plus size={15} /> Novo orçamento
-        </button>
-      </div>
-      <select
-        className={inputCls + " max-w-xs"}
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-      >
-        <option value="">Todos os status</option>
-        {STATUS_ORCAMENTO.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto crm-scroll">
-        <table className="w-full text-sm min-w-[760px]">
-          <thead>
-            <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
-              <th className="py-2.5 px-4 font-medium">Número</th>
-              <th className="py-2.5 px-4 font-medium">Cliente</th>
-              <th className="py-2.5 px-4 font-medium">Vendedor</th>
-              <th className="py-2.5 px-4 font-medium">Data</th>
-              <th className="py-2.5 px-4 font-medium">Validade</th>
-              <th className="py-2.5 px-4 font-medium">Valor</th>
-              <th className="py-2.5 px-4 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((o) => {
-              const cliente = leads.find((l) => l.id === o.clienteId);
-              return (
-                <tr
-                  key={o.id}
-                  className="border-b border-slate-50 hover:bg-slate-50"
-                >
-                  <td className="py-2.5 px-4 font-medium text-slate-700">
-                    #{String(o.numero).padStart(6, "0")}
-                  </td>
-                  <td className="py-2.5 px-4 text-slate-700">
-                    {cliente?.nome || "—"}
-                  </td>
-                  <td className="py-2.5 px-4 text-slate-600">
-                    {vendedorNome(o.vendedorId)}
-                  </td>
-                  <td className="py-2.5 px-4 text-slate-600">
-                    {formatDateBR(o.data)}
-                  </td>
-                  <td className="py-2.5 px-4 text-slate-600">
-                    {formatDateBR(o.validade)}
-                  </td>
-                  <td className="py-2.5 px-4 font-medium text-slate-700">
-                    {formatBRL(
-                      o.valorTotal ??
-                        o.itens?.reduce(
-                          (s, i) => s + i.quantidade * i.valorUnitario,
-                          0
-                        )
-                    )}
-                  </td>
-                  <td className="py-2.5 px-4">
-                    <select
-                      value={o.status}
-                      onChange={(e) => onStatusChange(o.id, e.target.value)}
-                      className={`text-xs rounded-full px-2 py-1 border-0 bg-${
-                        STATUS_TONE[o.status] || "slate"
-                      }-100 text-${
-                        STATUS_TONE[o.status] || "slate"
-                      }-700 font-medium`}
-                    >
-                      {STATUS_ORCAMENTO.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="py-8 text-center text-slate-400 text-sm"
-                >
-                  Nenhum orçamento encontrado.
-                </td>
-              </tr>
+            <div className="toolbar">
+              <div className="search"><Icon path={icons.search} size={16} /><input placeholder="Buscar por nome, telefone ou cidade..." value={fCli.search} onChange={(e) => setFCli({ ...fCli, search: e.target.value })} /></div>
+              <select value={fCli.status} onChange={(e) => setFCli({ ...fCli, status: e.target.value })}>
+                <option value="">Todos</option>
+                {statusClientesOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <div className="date-range">
+                <label>De <input type="date" value={fCli.from} onChange={(e) => setFCli({ ...fCli, from: e.target.value })} /></label>
+                <label>Até <input type="date" value={fCli.to} onChange={(e) => setFCli({ ...fCli, to: e.target.value })} /></label>
+              </div>
+            </div>
+
+            <div className="card table-card">
+              <table>
+                <thead><tr><th>Nome</th><th>Telefone</th><th>Cidade</th><th>Status</th><th>Último contato</th><th>Ações</th></tr></thead>
+                <tbody>
+                  {clientesFiltrados.map((c, i) => (
+                    <tr key={i}>
+                      <td>{c.nome}</td><td>{c.telefone}</td><td>{c.cidade}</td>
+                      <td><span className={badgeClass(c.status)}>{c.status}</span></td>
+                      <td>{formatBR(c.ultimoContato)}</td>
+                      <td className="row-actions">
+                        <button className="btn-icon" title="Copiar dados" onClick={() => copyRow(c, toast.fire)}><Icon path={icons.copy} size={14} /></button>
+                        <button className="btn-icon" title="Editar"><Icon path={icons.edit} size={14} /></button>
+                        <button className="btn-icon" title="Mais"><Icon path={icons.more} size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                  {clientesFiltrados.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--text-3)", padding: 26 }}>Nenhum cliente encontrado.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* ---------- CONTATOS ---------- */}
+        {page === "contatos" && (
+          <section className="page active">
+            <header className="page-head">
+              <div><h1>Contatos</h1><p className="sub">Todos os seus contatos em um só lugar.</p></div>
+              <div className="head-right">
+                <button className="btn btn-outline" onClick={() => openImport("contatos")}><Icon path={icons.upload} size={15} />Importar PDF/Excel</button>
+                <button className="btn btn-gold"><Icon path={icons.plus} size={15} />Novo Contato</button>
+              </div>
+            </header>
+
+            <div className="toolbar">
+              <div className="search"><Icon path={icons.search} size={16} /><input placeholder="Buscar por nome, telefone ou origem..." value={fCon.search} onChange={(e) => setFCon({ ...fCon, search: e.target.value })} /></div>
+              <select value={fCon.status} onChange={(e) => setFCon({ ...fCon, status: e.target.value })}>
+                <option value="">Todos</option>
+                {statusContatosOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select value={fCon.origem} onChange={(e) => setFCon({ ...fCon, origem: e.target.value })}>
+                <option value="">Origem</option>
+                {origemContatosOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="card table-card">
+              <table>
+                <thead><tr><th>Nome</th><th>Telefone</th><th>Origem</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody>
+                  {contatosFiltrados.map((c, i) => (
+                    <tr key={i}>
+                      <td>{c.nome}</td><td>{c.telefone}</td><td>{c.origem}</td>
+                      <td><span className={badgeClass(c.status)}>{c.status}</span></td>
+                      <td className="row-actions">
+                        <button className="btn-icon" title="Copiar dados" onClick={() => copyRow(c, toast.fire)}><Icon path={icons.copy} size={14} /></button>
+                        <button className="btn-icon" title="Editar"><Icon path={icons.edit} size={14} /></button>
+                        <button className="btn-icon" title="Mais"><Icon path={icons.more} size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                  {contatosFiltrados.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--text-3)", padding: 26 }}>Nenhum contato encontrado.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* ---------- ORÇAMENTOS ---------- */}
+        {page === "orcamentos" && (
+          <section className="page active">
+            <header className="page-head">
+              <div><h1>Orçamentos</h1><p className="sub">Acompanhe e gerencie todos os orçamentos enviados.</p></div>
+              <div className="head-right">
+                <button className="btn btn-outline" onClick={() => openImport("orcamentos")}><Icon path={icons.upload} size={15} />Importar PDF/Excel</button>
+                <button className="btn btn-gold"><Icon path={icons.plus} size={15} />Novo Orçamento</button>
+              </div>
+            </header>
+
+            <div className="toolbar">
+              <div className="search"><Icon path={icons.search} size={16} /><input placeholder="Buscar por cliente, produto ou número..." value={fOrc.search} onChange={(e) => setFOrc({ ...fOrc, search: e.target.value })} /></div>
+              <select value={fOrc.status} onChange={(e) => setFOrc({ ...fOrc, status: e.target.value })}>
+                <option value="">Todos</option>
+                {statusOrcamentosOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <div className="date-range">
+                <label>De <input type="date" value={fOrc.from} onChange={(e) => setFOrc({ ...fOrc, from: e.target.value })} /></label>
+                <label>Até <input type="date" value={fOrc.to} onChange={(e) => setFOrc({ ...fOrc, to: e.target.value })} /></label>
+              </div>
+            </div>
+
+            <div className="card table-card">
+              <table>
+                <thead><tr><th>Nº</th><th>Cliente</th><th>Produto/Serviço</th><th>Valor</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
+                <tbody>
+                  {orcamentosFiltrados.map((o, i) => (
+                    <tr key={i}>
+                      <td>{o.numero}</td><td>{o.cliente}</td><td>{o.produto}</td><td>{formatMoney(o.valor)}</td>
+                      <td><span className={badgeClass(o.status)}>{o.status}</span></td>
+                      <td>{formatBR(o.data)}</td>
+                      <td className="row-actions">
+                        <button className="btn-icon" title="Copiar dados" onClick={() => copyRow(o, toast.fire)}><Icon path={icons.copy} size={14} /></button>
+                        <button className="btn-icon" title="Editar"><Icon path={icons.edit} size={14} /></button>
+                        <button className="btn-icon" title="Mais"><Icon path={icons.more} size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                  {orcamentosFiltrados.length === 0 && <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--text-3)", padding: 26 }}>Nenhum orçamento encontrado.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* ---------- FUNIL ---------- */}
+        {page === "funil" && (
+          <section className="page active">
+            <header className="page-head">
+              <div><h1>Funil de Vendas</h1><p className="sub">Visualize em qual etapa estão seus leads e oportunidades.</p></div>
+              <div className="head-right"><select><option>Este mês</option><option>Mês passado</option><option>Este ano</option></select></div>
+            </header>
+
+            <div className="grid-funil">
+              <div className="card">
+                <div className="funnel">
+                  {funilEtapas.map((e, i) => (
+                    <div className="funnel-stage" key={i} style={{ width: `${40 + (e.valor / maxFunil) * 55}%` }}>
+                      {e.nome}<small>{e.valor} &nbsp;·&nbsp; {Math.round((e.valor / maxFunil) * 100)}%</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="funil-side">
+                <div className="card">
+                  <h3>Taxa de Conversão</h3>
+                  <Donut
+                    data={[{ nome: "Convertidos", valor: fechadasFunil, cor: "#D4A537" }, { nome: "Não convertidos", valor: inicialFunil - fechadasFunil, cor: "#232838" }]}
+                    centerLabel={`${Math.round((fechadasFunil / inicialFunil) * 100)}%`}
+                    centerSub={`${fechadasFunil} de ${inicialFunil} leads viraram vendas`}
+                  />
+                </div>
+                <div className="card">
+                  <h3>Média do Mês</h3>
+                  <div className="meta-numbers"><b>{fechadasFunil} / 20</b><span>{Math.round((fechadasFunil / 20) * 100)}%</span></div>
+                  <div className="progress-track"><div className="progress-fill" style={{ width: `${(fechadasFunil / 20) * 100}%` }}></div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ---------- RELATÓRIOS ---------- */}
+        {page === "relatorios" && (
+          <section className="page active">
+            <header className="page-head">
+              <div><h1>Relatórios</h1><p className="sub">Acompanhe seu desempenho com dados e gráficos.</p></div>
+              <div className="head-right">
+                <div className="date-range"><label>De <input type="date" /></label><label>Até <input type="date" /></label></div>
+                <select><option>Este mês</option><option>Mês passado</option><option>Este ano</option></select>
+              </div>
+            </header>
+
+            <div className="stat-grid">
+              <StatCard label="Vendas" value={formatMoney(totalVendasRel)} change="+28%" />
+              <StatCard label="Orçamentos" value={orcamentos.length} change="+25%" />
+              <StatCard label="Clientes Novos" value={clientes.length} change="+43%" />
+              <StatCard label="Ticket Médio" value={formatMoney(totalVendasRel / aprovadosCount)} change="+16%" />
+            </div>
+
+            <div className="grid-2">
+              <div className="card">
+                <h3>Vendas por período</h3>
+                <div className="bars">
+                  {vendasPeriodo.map((v, i) => (
+                    <div className="bar-col" key={i}>
+                      <div className="bar" style={{ height: `${(v.valor / maxVendasPeriodo) * 100}%` }}></div>
+                      <div className="bar-label">{v.dia}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="card">
+                <h3>Origem dos contatos</h3>
+                <Donut data={origemContatos} centerLabel={`${origemContatos[0].valor}%`} centerSub={origemContatos[0].nome} />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ---------- CONFIGURAÇÕES ---------- */}
+        {page === "config" && (
+          <section className="page active">
+            <header className="page-head">
+              <div><h1>Configurações</h1><p className="sub">Personalize o sistema do seu jeito.</p></div>
+            </header>
+
+            <div className="grid-2">
+              <div className="card">
+                <h3>Perfil</h3>
+                <div className="perfil-row">
+                  <div><div className="perfil-label">Nome</div><div className="perfil-value">Yasmin</div></div>
+                  <div><div className="perfil-label">E-mail</div><div className="perfil-value">yasmin@email.com</div></div>
+                  <button className="btn btn-gold">Editar perfil</button>
+                </div>
+              </div>
+              <div className="card">
+                <h3>Preferências</h3>
+                <ToggleRow label="Notificações por e-mail" />
+                <ToggleRow label="Notificações no WhatsApp" />
+                <ToggleRow label="Tema escuro" />
+              </div>
+            </div>
+
+            <div className="card">
+              <h3>Sobre o sistema</h3>
+              <p className="sub">CRM Vendas v1.00<br />Feito para impulsionar suas vendas!</p>
+            </div>
+          </section>
+        )}
+      </main>
+
+      {/* MODAL IMPORTAR */}
+      {importOpen && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-head">
+              <h3>Importar arquivo</h3>
+              <button className="modal-close" onClick={() => setImportOpen(false)}>&times;</button>
+            </div>
+            <p className="sub">Envie um arquivo <strong>.xlsx</strong>, <strong>.csv</strong> ou <strong>.pdf</strong> para extrair os dados automaticamente.</p>
+            <label className="dropzone"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}>
+              <Icon path={icons.upload} size={20} />
+              <span>{fileName || "Clique para escolher um arquivo ou arraste aqui"}</span>
+              <input type="file" ref={fileRef} hidden accept=".csv,.xlsx,.xls,.pdf"
+                onChange={(e) => { if (e.target.files[0]) handleFile(e.target.files[0]); }} />
+            </label>
+            {importRows.length > 0 && (
+              <div id="import-preview">
+                <table>
+                  <thead><tr>{Object.keys(importRows[0]).map((c) => <th key={c}>{c}</th>)}</tr></thead>
+                  <tbody>
+                    {importRows.slice(0, 8).map((r, i) => (
+                      <tr key={i}>{Object.keys(importRows[0]).map((c) => <td key={c}>{String(r[c])}</td>)}</tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="sub" style={{ marginTop: 8 }}>{importRows.length} registro(s) encontrado(s){importRows.length > 8 ? " — mostrando 8" : ""}.</p>
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
+            <div className="modal-actions">
+              <button className="btn btn-outline" onClick={() => setImportOpen(false)}>Cancelar</button>
+              <button className="btn btn-gold" disabled={!importRows.length} onClick={confirmImport}>Adicionar registros</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST */}
+      <div className={"toast" + (toast.show ? " show" : "")}>{toast.msg}</div>
     </div>
   );
 }
 
-function Metas({ metas, leads, onNew, onDelete }) {
-  const fechados = leads.filter((l) => l.etapa === "fechado");
+function StatCard({ label, value, change, icon }) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2
-          className="text-lg font-semibold text-slate-800"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Metas
-        </h2>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-1.5 bg-teal-700 text-white text-sm px-3 py-2 rounded-lg hover:bg-teal-800"
-        >
-          <Plus size={15} /> Nova meta
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {metas.map((m) => {
-          const realizado = fechados
-            .filter((l) => l.vendedorId === m.vendedorId)
-            .reduce((s, l) => s + l.valor, 0);
-          const pct = m.valor > 0 ? Math.round((realizado / m.valor) * 100) : 0;
-          return (
-            <div
-              key={m.id}
-              className="bg-white rounded-xl border border-slate-200 p-4"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="font-medium text-slate-800 text-sm">
-                    {vendedorNome(m.vendedorId)}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    Meta {m.periodo.toLowerCase()}
-                  </p>
-                </div>
-                <button
-                  onClick={() => onDelete(m.id)}
-                  className="text-slate-300 hover:text-rose-600"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-1">
-                <div
-                  className={`h-full rounded-full ${
-                    pct >= 100 ? "bg-emerald-600" : "bg-teal-600"
-                  }`}
-                  style={{ width: `${Math.min(100, pct)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>
-                  {formatBRL(realizado)} de {formatBRL(m.valor)}
-                </span>
-                <span className="font-medium text-slate-700">{pct}%</span>
-              </div>
-            </div>
-          );
-        })}
-        {metas.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-8 col-span-full">
-            Nenhuma meta cadastrada.
-          </p>
-        )}
-      </div>
+    <div className="stat-card">
+      <div className="stat-top">{icon && <div className="stat-icon"><Icon path={icon} size={17} /></div>}{label}</div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-change">▲ {change}</div>
+    </div>
+  );
+}
+
+function ToggleRow({ label }) {
+  const [on, setOn] = useState(true);
+  return (
+    <div className="toggle-row">
+      <span>{label}</span>
+      <label className="switch">
+        <input type="checkbox" checked={on} onChange={() => setOn(!on)} />
+        <span className="slider"></span>
+      </label>
     </div>
   );
 }
